@@ -18,7 +18,6 @@ except Exception as err:
 class TSDFVolume(object):
 
     def __init__(self,vol_bnds,voxel_size):
-
         # Define voxel volume parameters
         self._vol_bnds = vol_bnds # rows: x,y,z columns: min,max in world coordinates in meters
         self._voxel_size = voxel_size # in meters (determines volume discretization and resolution)
@@ -171,6 +170,39 @@ class TSDFVolume(object):
     #             self._vol_bnds[dim,1] += n_voxels_expand*self._voxel_size # update voxel volume bounds
 
 
+    def fill_grid(self, points):
+
+        grid_coords = [[int((point[i] - self._vol_origin[i]) / self._voxel_size) for i in range(3)] for point in points]
+        colors = [point[8] * 256. * 256. + point[7] * 256. + point[6] for point in points]
+
+        counter = min(len(points) / 10, 10000)
+
+        i = 0
+
+        for grid_coord, color in zip(grid_coords, colors):
+
+            if any([grid_coord[i] < 0 or grid_coord[i] >= self._vol_dim[i] for i in range(3)]):
+                continue
+
+            self._tsdf_vol_cpu[grid_coord[0]][grid_coord[1]][grid_coord[2]] = -1
+
+            for a in range(-1, 2):
+                for b in range(-1, 2):
+                    for c in range(-1, 2):
+
+                        ch = (a,b,c)
+
+                        if any(grid_coord[i] + ch[i] < 0 or grid_coord[i] + ch[i] >= self._vol_dim[i] for i in range(3)):
+                            continue
+
+                        self._color_vol_cpu[grid_coord[0] + ch[0]][grid_coord[1] + ch[1]][grid_coord[2] + ch[2]] = color
+
+            i += 1
+
+            if i % counter == 0:
+                print("processed ", i, " vertices")
+
+
     def integrate(self,color_im,depth_im,cam_intr,cam_pose,obs_weight=1.):
         im_h = depth_im.shape[0]
         im_w = depth_im.shape[1]
@@ -199,6 +231,15 @@ class TSDFVolume(object):
 
             # Get voxel grid coordinates
             xv,yv,zv = np.meshgrid(range(self._vol_dim[0]),range(self._vol_dim[1]),range(self._vol_dim[2]),indexing='ij')
+
+            # dims = (xv, yv, zv)
+
+            # dims = [np.prod([i for i in dim.shape]) for dim in dims]
+
+            # print(dims)
+
+            # vox_coords = np.empty((len(dims), dims[0]))
+
             vox_coords = np.concatenate((xv.reshape(1,-1),yv.reshape(1,-1),zv.reshape(1,-1)),axis=0).astype(int)
 
             # Voxel coordinates to world coordinates
@@ -258,7 +299,8 @@ class TSDFVolume(object):
     # Get mesh of voxel volume via marching cubes
     def get_mesh(self):
         tsdf_vol,color_vol = self.get_volume()
-
+        #tsdf_vol.tofile("vol.txt",sep=",")
+        #color_vol.tofile("color_vol.txt",sep=",")
         # Marching cubes
         verts,faces,norms,vals = measure.marching_cubes_lewiner(tsdf_vol,level=0)
         verts_ind = np.round(verts).astype(int)
