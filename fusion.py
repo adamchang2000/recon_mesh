@@ -195,7 +195,14 @@ class TSDFVolume(object):
                         if any(grid_coord[i] + ch[i] < 0 or grid_coord[i] + ch[i] >= self._vol_dim[i] for i in range(3)):
                             continue
 
-                        self._color_vol_cpu[grid_coord[0] + ch[0]][grid_coord[1] + ch[1]][grid_coord[2] + ch[2]] = color
+
+                        #average the colors in the surrounding 3x3 to mitigate blotchiness
+
+                        self._color_vol_cpu[grid_coord[0] + ch[0]][grid_coord[1] + ch[1]][grid_coord[2] + ch[2]] = (self._color_vol_cpu[grid_coord[0] + ch[0]][grid_coord[1] + ch[1]][grid_coord[2] + ch[2]] *
+                        self._weight_vol_cpu[grid_coord[0] + ch[0]][grid_coord[1] + ch[1]][grid_coord[2] + ch[2]] + color) / 
+                        (self._weight_vol_cpu[grid_coord[0] + ch[0]][grid_coord[1] + ch[1]][grid_coord[2] + ch[2]] + 1)
+
+                        self._weight_vol_cpu[grid_coord[0] + ch[0]][grid_coord[1] + ch[1]][grid_coord[2] + ch[2]] += 1
 
             i += 1
 
