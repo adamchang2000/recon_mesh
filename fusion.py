@@ -173,7 +173,11 @@ class TSDFVolume(object):
     def fill_grid(self, points):
 
         grid_coords = [[int((point[i] - self._vol_origin[i]) / self._voxel_size) for i in range(3)] for point in points]
-        colors = [point[8] * 256. * 256. + point[7] * 256. + point[6] for point in points]
+
+        if len(points[0]) < 9:
+            colors = [(point[5], point[4], point[3]) for point in points]
+        else:
+            colors = [(point[8], point[7], point[6]) for point in points]
 
         counter = min(len(points) / 10, 10000)
 
@@ -196,13 +200,32 @@ class TSDFVolume(object):
                             continue
 
 
+
+                        #only placing color if surrounding 3x3 doesn't have color?
+                        # if self._weight_vol_cpu[grid_coord[0] + ch[0]][grid_coord[1] + ch[1]][grid_coord[2] + ch[2]] == 0:
+                        #     self._color_vol_cpu[grid_coord[0] + ch[0]][grid_coord[1] + ch[1]][grid_coord[2] + ch[2]] = color[0] * 256. * 256. + color[1] * 256. + color[0]
+                        #     self._weight_vol_cpu[grid_coord[0] + ch[0]][grid_coord[1] + ch[1]][grid_coord[2] + ch[2]] += 1
+                        
+
                         #average the colors in the surrounding 3x3 to mitigate blotchiness
 
-                        self._color_vol_cpu[grid_coord[0] + ch[0]][grid_coord[1] + ch[1]][grid_coord[2] + ch[2]] = (self._color_vol_cpu[grid_coord[0] + ch[0]][grid_coord[1] + ch[1]][grid_coord[2] + ch[2]] *
-                        self._weight_vol_cpu[grid_coord[0] + ch[0]][grid_coord[1] + ch[1]][grid_coord[2] + ch[2]] + color) / 
-                        (self._weight_vol_cpu[grid_coord[0] + ch[0]][grid_coord[1] + ch[1]][grid_coord[2] + ch[2]] + 1)
+                        w_old = self._weight_vol_cpu[grid_coord[0] + ch[0]][grid_coord[1] + ch[1]][grid_coord[2] + ch[2]]
+                        w_new = w_old + 1
+                        self._weight_vol_cpu[grid_coord[0] + ch[0]][grid_coord[1] + ch[1]][grid_coord[2] + ch[2]] = w_new
 
-                        self._weight_vol_cpu[grid_coord[0] + ch[0]][grid_coord[1] + ch[1]][grid_coord[2] + ch[2]] += 1
+                        old_color = self._color_vol_cpu[grid_coord[0] + ch[0]][grid_coord[1] + ch[1]][grid_coord[2] + ch[2]]
+                        old_b = np.floor(old_color/(256.*256.))
+                        old_g = np.floor((old_color-old_b*256.*256.)/256.)
+                        old_r = old_color-old_b*256.*256.-old_g*256.
+                        new_b = color[0]
+                        new_g = color[1]
+                        new_r = color[2]
+                        new_b = np.minimum(np.round(np.divide(np.multiply(old_b,w_old)+new_b,w_new)),255.)
+                        new_g = np.minimum(np.round(np.divide(np.multiply(old_g,w_old)+new_g,w_new)),255.)
+                        new_r = np.minimum(np.round(np.divide(np.multiply(old_r,w_old)+new_r,w_new)),255.)
+                        self._color_vol_cpu[grid_coord[0] + ch[0]][grid_coord[1] + ch[1]][grid_coord[2] + ch[2]] = new_b*256.*256.+new_g*256.+new_r
+
+
 
             i += 1
 
